@@ -11,28 +11,28 @@ import numpy as np
 BASE_DIR    = os.path.dirname(os.path.abspath(__file__))
 MODELS_DIR  = os.path.join(BASE_DIR, "models")
 MODEL_PATH  = os.path.join(MODELS_DIR, "updatedCNN.h5")
-MODEL_URL   = os.environ.get("MODEL_URL")  # e.g. your GitHub Releases URL
+MODEL_URL   = os.environ.get("MODEL_URL")  # Your GitHub Releases URL
 IMG_SIZE    = (224, 224)
 CLASS_LABELS = ["Bad Posture", "Good Posture"]
 
-# ─── Ensure model exists locally (download if missing) ───────────────────────
-if not os.path.exists(MODEL_PATH):
-    if not MODEL_URL:
-        raise RuntimeError("MODEL_URL env var is not set and no local model found")
-    os.makedirs(MODELS_DIR, exist_ok=True)
-    print(f"Downloading model from {MODEL_URL}…")
-    resp = requests.get(MODEL_URL, stream=True)
-    resp.raise_for_status()
-    with open(MODEL_PATH, "wb") as f:
-        for chunk in resp.iter_content(chunk_size=4_194_304):
-            f.write(chunk)
-    print("Download complete.")
+# ─── Always download the real model at startup ───────────────────────────────
+if not MODEL_URL:
+    raise RuntimeError("MODEL_URL environment variable is not set")
+
+os.makedirs(MODELS_DIR, exist_ok=True)
+print(f"Downloading model from {MODEL_URL}…")
+resp = requests.get(MODEL_URL, stream=True)
+resp.raise_for_status()
+with open(MODEL_PATH, "wb") as f:
+    for chunk in resp.iter_content(chunk_size=4_194_304):
+        f.write(chunk)
+print("Download complete.")
 
 # ─── Flask App Setup ─────────────────────────────────────────────────────────
 app = Flask(
     __name__,
     static_folder=os.path.join(BASE_DIR, "docs"),  # serve files from docs/
-    static_url_path=""                             # at root URL
+    static_url_path=""                              # at root URL
 )
 CORS(app)
 
@@ -41,7 +41,7 @@ print(f"Loading model from {MODEL_PATH}…")
 model = load_model(MODEL_PATH, compile=False)
 print("Model loaded.")
 
-# ─── Helpers ──────────────────────────────────────────────────────────────────
+# ─── Helpers ─────────────────────────────────────────────────────────────────
 def preprocess_image(image_bytes):
     """Load image bytes, resize, normalize, and return a batch tensor."""
     img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
@@ -52,7 +52,6 @@ def preprocess_image(image_bytes):
 # ─── Routes ───────────────────────────────────────────────────────────────────
 @app.route("/")
 def index():
-    # Serve docs/index.html
     return app.send_static_file("index.html")
 
 @app.route("/predict", methods=["POST"])
@@ -75,5 +74,4 @@ def predict():
 # ─── Run Server ───────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    # listen on all interfaces so Railway can route to it
     app.run(host="0.0.0.0", port=port, debug=True)
