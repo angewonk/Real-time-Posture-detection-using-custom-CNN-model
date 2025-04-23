@@ -1,7 +1,7 @@
 import os
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from keras.models import load_model
+from tensorflow.keras.models import load_model
 from PIL import Image
 import numpy as np
 import io
