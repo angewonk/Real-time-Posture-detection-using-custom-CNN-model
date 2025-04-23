@@ -1,7 +1,11 @@
 // docs/app.js
 
-// ─── Configuration ─────────────────────────────────────────────────────────────
-// Replace this with your actual Railway URL (no trailing slash)
+console.log("🚀 app.js loaded");
+window.onerror = (msg, url, line, col, err) => {
+  console.error("🔴 Global error:", msg, "at", url, line, col, err);
+};
+
+// ─── Configuration ───────────────────────────────────────────────────────────
 const API_BASE = "https://web-production-7239.up.railway.app";
 
 const video        = document.getElementById("video");
@@ -19,14 +23,8 @@ const LOCK_MS      = 10 * 1000; // 10 seconds
 
 // ─── STEP 1: ASK FOR CAMERA PERMISSION ────────────────────────────────────────
 async function ensurePermission() {
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-    stream.getTracks().forEach(t => t.stop());
-  } catch (err) {
-    statusEl.textContent = "Camera access denied";
-    statusEl.style.color = "gray";
-    throw err;
-  }
+  const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+  stream.getTracks().forEach(t => t.stop());
 }
 
 // ─── STEP 2: ENUMERATE CAMERAS ─────────────────────────────────────────────────
@@ -35,7 +33,7 @@ async function getCameras() {
   devices
     .filter(d => d.kind === "videoinput")
     .forEach((d, i) => {
-      const label = d.label || `Camera ${i + 1}`;
+      const label = d.label || `Camera ${i+1}`;
       cameraSelect.insertAdjacentHTML(
         "beforeend",
         `<option value="${d.deviceId}">${label}</option>`
@@ -45,15 +43,12 @@ async function getCameras() {
 
 // ─── STEP 3: START A STREAM ───────────────────────────────────────────────────
 async function startStream(deviceId) {
-  if (currentStream) {
-    currentStream.getTracks().forEach(t => t.stop());
-  }
+  if (currentStream) currentStream.getTracks().forEach(t => t.stop());
   try {
     currentStream = await navigator.mediaDevices.getUserMedia({
       video: { deviceId: { exact: deviceId } }
     });
-  } catch (e) {
-    console.warn("Exact camera not available, falling back to default:", e);
+  } catch {
     currentStream = await navigator.mediaDevices.getUserMedia({ video: true });
   }
   video.srcObject = currentStream;
@@ -71,7 +66,10 @@ async function predict() {
 
   let json;
   try {
-    const res = await fetch(`${API_BASE}/predict`, { method: "POST", body: fd });
+    const res = await fetch(`${API_BASE}/predict`, {
+      method: "POST",
+      body: fd
+    });
     json = await res.json();
   } catch (err) {
     console.error(err);
@@ -81,7 +79,7 @@ async function predict() {
   }
 
   statusEl.textContent = json.label;
-  statusEl.style.color = json.class === 1 ? "white" : "red";
+  statusEl.style.color   = (json.class === 1 ? "white" : "red");
 
   if (json.class === 0) {
     if (!badStart) badStart = Date.now();
@@ -101,11 +99,7 @@ async function predict() {
 // ─── LOCKOUT ──────────────────────────────────────────────────────────────────
 async function engageLockout() {
   if (document.fullscreenEnabled) {
-    try {
-      await document.documentElement.requestFullscreen();
-    } catch (e) {
-      console.warn("Fullscreen request failed:", e);
-    }
+    try { await document.documentElement.requestFullscreen(); } catch {}
   }
   alertSound.loop = true;
   alertSound.play().catch(() => {});
@@ -115,33 +109,39 @@ async function engageLockout() {
 
 async function disengageLockout() {
   lockout.style.visibility = "hidden";
-  alertSound.loop = false;
+  alertSound.loop   = false;
   alertSound.pause();
   alertSound.currentTime = 0;
   video.classList.remove("lockout-pulse");
   if (document.fullscreenElement) {
-    try {
-      await document.exitFullscreen();
-    } catch (e) {
-      console.warn("Exiting fullscreen failed:", e);
-    }
+    try { await document.exitFullscreen(); } catch {}
   }
 }
 
 // ─── STARTUP ─────────────────────────────────────────────────────────────────
 document.addEventListener("DOMContentLoaded", async () => {
+  console.log("📥 DOMContentLoaded fired");
   try {
+    console.log("…requesting camera permission");
     await ensurePermission();
-    await getCameras();
+    console.log("✅ camera permission granted");
 
-    if (cameraSelect.options.length > 0) {
-      await startStream(cameraSelect.value);
-      setInterval(predict, 1000);
-    } else {
-      statusEl.textContent = "No camera found";
-      statusEl.style.color = "gray";
-    }
-  } catch {
-    // Permission denied or other startup error
+    console.log("…enumerating cameras");
+    await getCameras();
+    console.log("✅ cameras listed:", cameraSelect.options.length);
+
+    console.log("…starting stream");
+    await startStream(cameraSelect.value);
+    console.log("✅ stream started");
+
+    console.log("…starting predict loop");
+    setInterval(() => {
+      console.log("🔁 predict()");
+      predict();
+    }, 1000);
+
+  } catch (err) {
+    console.error("❌ initialization error:", err);
+    statusEl.textContent = "Startup error – see console";
   }
 });

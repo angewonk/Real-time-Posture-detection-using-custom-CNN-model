@@ -9,26 +9,30 @@
 <body>
   <header class="header">
     <h1>Posture Monitor</h1>
-    <div class="header-controls">
+    <div class="camera-selector">
       <label for="cameraSelect">Camera</label>
       <select id="cameraSelect"></select>
     </div>
   </header>
 
   <main class="main">
-    <div class="video-wrapper">
-      <video id="video" autoplay playsinline></video>
-      <div id="status" class="status-label">Initializing...</div>
-    </div>
+    <video id="video" autoplay muted playsinline></video>
+    <div id="status">Initializing…</div>
+    <!-- hidden snapshot canvas for sending frames -->
+    <canvas id="snap" width="224" height="224" style="display:none"></canvas>
+    <div id="lockoutOverlay">Fix Your Posture!!!</div>
   </main>
 
   <footer class="footer">
-    Developed by Jimenez & Mallari | 2025
+    Developed by Jimenez &amp; Mallari | 2025
   </footer>
 
-  <canvas id="snap" width="224" height="224" style="display:none;"></canvas>
-  <div id="lockoutOverlay">Fix Your Posture!!!</div>
-  <audio id="alertSound" src="bad_posture_alert.mp3" preload="auto"></audio>
+  <audio
+    id="alertSound"
+    src="bad_posture_alert.mp3"
+    preload="auto"
+  ></audio>
+
   <script src="app.js"></script>
 </body>
 </html>
