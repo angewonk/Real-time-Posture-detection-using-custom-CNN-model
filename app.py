@@ -11,7 +11,7 @@ import numpy as np
 BASE_DIR    = os.path.dirname(os.path.abspath(__file__))
 MODELS_DIR  = os.path.join(BASE_DIR, "models")
 MODEL_PATH  = os.path.join(MODELS_DIR, "updatedCNN.h5")
-MODEL_URL   = os.environ.get("MODEL_URL")  # Your GitHub Releases URL
+MODEL_URL   = os.environ.get("MODEL_URL", "").strip()
 IMG_SIZE    = (224, 224)
 CLASS_LABELS = ["Bad Posture", "Good Posture"]
 
