@@ -1,0 +1,14 @@
+# Python artifacts
+__pycache__/
+*.py[cod]
+venv/
+*.keras
+*.h5
+
+# Node/npm
+node_modules/
+npm-debug.log*
+
+# IDEs
+.vscode/
+.DS_Store
