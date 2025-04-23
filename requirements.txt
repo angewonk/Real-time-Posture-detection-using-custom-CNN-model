@@ -4,3 +4,4 @@ tensorflow==2.18.0
 pillow==9.5.0
 numpy==1.26.4
 gunicorn==20.1.0
+requests==2.32.3
