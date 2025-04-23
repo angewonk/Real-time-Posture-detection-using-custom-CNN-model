@@ -58,26 +58,33 @@ def preprocess_image(image_bytes):
 def index():
     return app.send_static_file("index.html")
 
-@app.route("/predict", methods=["OPTIONS", "POST"])
+@app.route("/predict", methods=["OPTIONS","POST"])
 def predict():
     if request.method == "OPTIONS":
-        # preflight response
         return make_response("", 204)
 
-    if "image" not in request.files:
-        return jsonify({"error": "No image provided"}), 400
+    try:
+        if "image" not in request.files:
+            return jsonify({"error": "No image provided"}), 400
 
-    img_bytes = request.files["image"].read()
-    tensor    = preprocess_image(img_bytes)
-    preds     = model.predict(tensor, verbose=0)[0]
-    idx       = int(np.argmax(preds))
-    conf      = float(np.max(preds))
+        img_bytes = request.files["image"].read()
+        tensor    = preprocess_image(img_bytes)
+        preds     = model.predict(tensor, verbose=0)[0]
+        idx       = int(np.argmax(preds))
+        conf      = float(np.max(preds))
 
-    return jsonify({
-        "class":      idx,
-        "confidence": round(conf, 4),
-        "label":      CLASS_LABELS[idx]
-    })
+        return jsonify({
+            "class":      idx,
+            "confidence": round(conf, 4),
+            "label":      CLASS_LABELS[idx]
+        })
+
+    except Exception as e:
+        app.logger.exception("✖ predict failed")
+        return jsonify({
+          "error": "server error",
+          "details": str(e)
+        }), 500
 
 # ─── Run server ────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
