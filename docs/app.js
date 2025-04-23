@@ -1,78 +1,108 @@
-const video = document.getElementById("video");
+// docs/app.js
+
+// ─── Configuration ─────────────────────────────────────────────────────────────
+const API_BASE = "https://web-production-7239.up.railway.app"; // your Railway URL
+
+const video        = document.getElementById("video");
 const cameraSelect = document.getElementById("cameraSelect");
-const statusEl = document.getElementById("status");
-const lockout = document.getElementById("lockoutOverlay");
-const alertSound = document.getElementById("alertSound");
-const snap = document.getElementById("snap");
-const ctx = snap.getContext("2d");
+const statusEl     = document.getElementById("status");
+const lockout      = document.getElementById("lockoutOverlay");
+const alertSound   = document.getElementById("alertSound");
+const snap         = document.getElementById("snap");
+const ctx          = snap.getContext("2d");
 
 let currentStream = null,
     badStart      = null,
     lockoutActive = false;
-const LOCK_MS = 10000;
-const API_BASE = "https://web-production-7239.up.railway.app";
+const LOCK_MS = 10_000; // 10 seconds
 
-async function startCamera() {
-  try {
-    currentStream = await navigator.mediaDevices.getUserMedia({video: true});
-    video.srcObject = currentStream;
-  } catch (err) {
-    console.error("Error accessing camera", err);
-    statusEl.textContent = "Failed to access camera";
-  }
+async function ensurePermission() {
+  const s = await navigator.mediaDevices.getUserMedia({ video: true });
+  s.getTracks().forEach(t => t.stop());
 }
+async function getCameras() {
+  const devices = await navigator.mediaDevices.enumerateDevices();
+  devices.filter(d => d.kind === "videoinput")
+         .forEach((d,i) => {
+           cameraSelect.insertAdjacentHTML(
+             "beforeend",
+             `<option value="${d.deviceId}">${d.label||"Camera "+(i+1)}</option>`
+           );
+         });
+}
+async function startStream(id) {
+  if (currentStream) currentStream.getTracks().forEach(t=>t.stop());
+  try {
+    currentStream = await navigator.mediaDevices.getUserMedia({
+      video: { deviceId: { exact: id } }
+    });
+  } catch {
+    currentStream = await navigator.mediaDevices.getUserMedia({ video: true });
+  }
+  video.srcObject = currentStream;
+}
+cameraSelect.onchange = () => startStream(cameraSelect.value);
 
 async function predict() {
-  if (!currentStream) return;
-  
   ctx.drawImage(video, 0, 0, snap.width, snap.height);
-  const blob = await new Promise(res => snap.toBlob(res, "image/jpeg"));
-  const formData = new FormData();
-  formData.append('image', blob, 'frame.jpg');
+  const blob = await new Promise(r=>snap.toBlob(r,"image/jpeg"));
+  const fd   = new FormData();
+  fd.append("image", blob, "frame.jpg");
 
   try {
-    const resp = await fetch(`${API_BASE}/predict`, {
-      method: 'POST',
-      body: formData
-    });
-    
-    if (!resp.ok) throw new Error(`HTTP error ${resp.status}`);
-    
-    const pred = await resp.json();
-    console.log(pred);
-    statusEl.textContent = pred.label;
+    const res = await fetch(`${API_BASE}/predict`, { method:"POST", body:fd });
+    const json = await res.json();
+    statusEl.textContent = json.label;
+    statusEl.style.color   = json.class===1?"white":"red";
 
-    if (pred.class === 0) { // bad posture 
+    if (json.class===0) {
       if (!badStart) badStart = Date.now();
-      else if (!lockoutActive && Date.now() - badStart > LOCK_MS) {
+      else if (!lockoutActive && Date.now()-badStart>LOCK_MS) {
         lockoutActive = true;
         engageLockout();
       }
     } else {
       badStart = null;
-      lockoutActive = false;
-      disengageLockout(); 
+      if (lockoutActive) {
+        lockoutActive = false;
+        disengageLockout();
+      }
     }
-  } catch (err) {
-    console.error("Prediction error", err);
-    statusEl.textContent = "Prediction error";
+  } catch {
+    statusEl.textContent = "Connection error";
+    statusEl.style.color = "gray";
   }
 }
 
-function engageLockout() {
+async function engageLockout() {
+  if (document.fullscreenEnabled) document.documentElement.requestFullscreen().catch(()=>{});
+  alertSound.loop = true;
+  alertSound.play().catch(()=>{});
   lockout.style.visibility = "visible";
-  alertSound.play();
+  video.classList.add("lockout-pulse");
 }
-
-function disengageLockout() {
+async function disengageLockout() {
   lockout.style.visibility = "hidden";
+  alertSound.loop = false;
   alertSound.pause();
   alertSound.currentTime = 0;
+  video.classList.remove("lockout-pulse");
+  if (document.fullscreenElement) document.exitFullscreen().catch(()=>{});
 }
 
-cameraSelect.addEventListener('change', startCamera);
-
-document.addEventListener("DOMContentLoaded", () => {
-  startCamera();
-  setInterval(predict, 1000);
+document.addEventListener("DOMContentLoaded", async () => {
+  try {
+    await ensurePermission();
+    await getCameras();
+    if (cameraSelect.options.length > 0) {
+      await startStream(cameraSelect.value);
+      setInterval(predict, 1000);
+    } else {
+      statusEl.textContent = "No camera found";
+      statusEl.style.color = "gray";
+    }
+  } catch (e) {
+    statusEl.textContent = "Startup error";
+    statusEl.style.color = "gray";
+  }
 });

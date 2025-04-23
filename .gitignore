@@ -1,13 +1,20 @@
-# Python artifacts
+# ─── Python artifacts ─────────────────────────────────────────────────────────
 __pycache__/
 *.py[cod]
+*.pyc
 venv/
 *.h5
 
-# Node/npm
+# ─── Node/npm artifacts ───────────────────────────────────────────────────────
 node_modules/
 npm-debug.log*
 
-# IDEs
+# ─── Model artifacts (downloaded at runtime) ─────────────────────────────────
+models/
+
+# ─── Environment files ────────────────────────────────────────────────────────
+.env
+
+# ─── IDE config ───────────────────────────────────────────────────────────────
 .vscode/
 .DS_Store

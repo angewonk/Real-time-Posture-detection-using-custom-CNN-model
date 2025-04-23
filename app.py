@@ -1,53 +1,83 @@
 import os
+import io
 import requests
-from flask import Flask, jsonify, request
+from flask import Flask, request, jsonify, make_response
 from flask_cors import CORS
-import tensorflow as tf
+from tensorflow.keras.models import load_model
 from PIL import Image
 import numpy as np
-import io
 
-app = Flask(__name__)
-CORS(app)
+# ─── Configuration ─────────────────────────────────────────────────────────────
+BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
+MODELS_DIR = os.path.join(BASE_DIR, "models")
+os.makedirs(MODELS_DIR, exist_ok=True)
 
-MODEL_FILE = 'updatedCNN.h5'
-MODEL_PATH = f'/app/models/{MODEL_FILE}'
-MODEL_URL = os.environ.get('MODEL_URL', '').strip()
-IMG_SIZE = (224, 224)  
+MODEL_FILE = "updatedCNN.h5"
+MODEL_PATH = os.path.join(MODELS_DIR, MODEL_FILE)
+MODEL_URL  = os.environ.get("MODEL_URL", "").strip()
+IMG_SIZE   = (224, 224)
 CLASS_LABELS = ["Bad Posture", "Good Posture"]
 
+# ─── Download model at startup if missing ─────────────────────────────────────
 if MODEL_URL and not os.path.exists(MODEL_PATH):
-    os.makedirs('/app/models', exist_ok=True)
-    print(f"Downloading model from {MODEL_URL} ...")
-    r = requests.get(MODEL_URL, stream=True)
+    print(f"Downloading model from {MODEL_URL} …", flush=True)
+    r = requests.get(MODEL_URL, stream=True, timeout=60)
     r.raise_for_status()
-    with open(MODEL_PATH, 'wb') as f:
-        for chunk in r.iter_content(chunk_size=8192): 
+    with open(MODEL_PATH, "wb") as f:
+        for chunk in r.iter_content(1024*1024):
             f.write(chunk)
-    print("Model downloaded.")
+    print("Download complete.", flush=True)
 
-model = tf.keras.models.load_model(MODEL_PATH)
+# ─── Flask App Setup ──────────────────────────────────────────────────────────
+app = Flask(
+    __name__,
+    static_folder=os.path.join(BASE_DIR, "docs"),
+    static_url_path=""
+)
+CORS(app)
 
-def preprocess(img_bytes):
-    img = Image.open(io.BytesIO(img_bytes))
+# ─── Load Model ───────────────────────────────────────────────────────────────
+print(f"Loading model from {MODEL_PATH} …", flush=True)
+model = load_model(MODEL_PATH, compile=False)
+print("Model loaded.", flush=True)
+
+# ─── Helpers ──────────────────────────────────────────────────────────────────
+def preprocess_image(image_bytes):
+    img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
     img = img.resize(IMG_SIZE)
-    img_arr = np.array(img) / 255.0
-    return np.expand_dims(img_arr, 0)
+    arr = np.array(img, dtype="float32") / 255.0
+    return np.expand_dims(arr, axis=0)
 
-@app.route('/predict', methods=['POST'])
+# ─── Routes ───────────────────────────────────────────────────────────────────
+@app.route("/")
+def index():
+    return app.send_static_file("index.html")
+
+@app.route("/ping")
+def ping():
+    return jsonify({"pong": True})
+
+@app.route("/predict", methods=["OPTIONS", "POST"])
 def predict():
-    if 'image' not in request.files:
-        return jsonify({'error': 'no image'}), 400
-    
-    img_bytes = request.files['image'].read()
-    tensor = preprocess(img_bytes)
-    preds = model.predict(tensor)[0]
-    
+    if request.method == "OPTIONS":
+        return make_response("", 204)
+
+    if "image" not in request.files:
+        return jsonify({"error": "No image provided"}), 400
+
+    img_bytes = request.files["image"].read()
+    tensor    = preprocess_image(img_bytes)
+    preds     = model.predict(tensor, verbose=0)[0]
+    idx       = int(np.argmax(preds))
+    conf      = float(np.max(preds))
+
     return jsonify({
-        'class': int(preds.argmax()), 
-        'confidence': float(preds.max()),
-        'label': CLASS_LABELS[preds.argmax()]  
+        "class":      idx,
+        "confidence": round(conf, 4),
+        "label":      CLASS_LABELS[idx]
     })
 
-if __name__ == '__main__':
-    app.run()
+# ─── Run Server ───────────────────────────────────────────────────────────────
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
